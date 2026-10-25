@@ -85,3 +85,5 @@ To test ProofStack in seconds:
 - **No AI Autocracy**: AI never sets final marks without human sign-off.
 - **Evidence-Grounded**: Every finding must cite visual proof or note missing demonstration.
 - **Fast & Minimal**: Zero heavy databases, vector stores, or complex orchestration frameworks. Everything runs efficiently in Next.js.
+
+
