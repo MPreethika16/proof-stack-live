@@ -1,78 +1,49 @@
-import { GoogleGenAI, createUserContent, createPartFromUri, FileState } from "@google/genai";
-import type { Criterion } from "@/types/evaluation";
-import { EvaluationResultSchema } from "@/lib/evaluation-schema";
+import {
+  GoogleGenAI,
+  ThinkingLevel,
+  createUserContent,
+} from "@google/genai";
+import type { Criterion, EvaluationResult } from "@/types/evaluation";
+import { EvaluationServiceError } from "@/lib/errors";
+import {
+  EvaluationResultSchema,
+  evaluationResponseJsonSchema,
+  normalizeEvaluationResult,
+} from "@/lib/evaluation-schema";
 
-// Evaluation model: gemini-3.8-flash (supports video, audio, image modalities)
-const MODEL_ID = "gemini-3.8-flash";
+/**
+ * Official Gemma 4 identifier from @google/genai 2.27.0 Model union
+ * and https://ai.google.dev/gemma/docs/core/gemma_on_gemini_api
+ *
+ * Supported on Gemini API: gemma-4-26b-a4b-it, gemma-4-31b-it.
+ * This model accepts text + image input. Do not send native video/audio.
+ */
+export const GEMMA_MODEL_ID = "gemma-4-26b-a4b-it";
+export { EvaluationServiceError } from "@/lib/errors";
 
 const SYSTEM_INSTRUCTION = `You are an evidence-review assistant for a software project evaluation system.
 
-Your role is to evaluate each reviewer-defined criterion ONLY against the supplied multimodal evidence (videos, screenshots, and participant claims).
+Your role is to evaluate each reviewer-defined criterion ONLY against the supplied labeled evidence. Evidence may include website screenshots (runtime), repository excerpts (code/docs), uploaded images, and the project description/claim.
 
 CRITICAL RULES:
 1. Do not assume functionality that is not demonstrated in the evidence.
 2. ABSENCE OF EVIDENCE IS NOT EVIDENCE OF FAILURE. If something is simply not shown, return NOT_DEMONSTRATED — not FAIL.
 3. Use FAIL only when the supplied evidence actually demonstrates behavior that contradicts the criterion.
 4. Use UNCERTAIN when relevant evidence exists but does not conclusively establish the requirement.
-5. Never fabricate timestamps, UI states, actions, or observations.
+5. Never fabricate UI states, actions, filenames, or observations.
 6. Suggested marks must remain within the criterion's maximum marks (0 to maxMarks).
 7. For PASS: suggest high/full marks where evidence justifies it.
 8. For PARTIAL: suggest partial marks proportional to what is demonstrated.
 9. For FAIL: suggest low/zero marks when evidence clearly contradicts criterion.
 10. For NOT_DEMONSTRATED: suggest 0 marks (requirement was not shown).
 11. For UNCERTAIN: use null for suggestedMarks when a defensible score cannot be determined.
-12. For every conclusion, reference the specific evidence that supports it (filename, timestamp if video).
-13. Your evaluation is advisory only. A human reviewer makes the final decision.
+12. For every conclusion, set evidence[].source to the exact labeled evidence id (filename or repository path). Include screenshotIndex, step, kind, url, path, and lineRange when those labels are present.
+13. Source code and README text are NOT proof that a feature works at runtime. Website screenshots are NOT proof of implementation quality. If sources disagree, use UNCERTAIN and describe the discrepancy.
+14. Clearly distinguish observed runtime behaviour from untested behaviour.
+15. confidence is an integer from 0 to 100 (not 0-1).
+16. Your evaluation is advisory only. A human reviewer makes the final decision.
 
-Return ONLY valid JSON matching the exact schema provided. No markdown fences, no explanation outside the JSON.`;
-
-function buildPrompt(criteria: Criterion[], claim: string): string {
-  const rubric = criteria
-    .map(
-      (c, i) =>
-        `Criterion ${i + 1} (id: "${c.id}"): "${c.requirement}" — max ${c.maxMarks} marks`
-    )
-    .join("\n");
-
-  const schema = `{
-  "summary": {
-    "suggestedScore": <number: sum of suggestedMarks, treating null as 0>,
-    "maxScore": <number: sum of all maxMarks>,
-    "evidenceCoverage": <number 0-100: % of criteria with sufficient evidence>
-  },
-  "criteria": [
-    {
-      "criterionId": "<matches criterion id>",
-      "criterion": "<criterion text>",
-      "status": "<PASS|PARTIAL|FAIL|UNCERTAIN|NOT_DEMONSTRATED>",
-      "suggestedMarks": <number or null>,
-      "maxMarks": <number>,
-      "confidence": <number 0-100>,
-      "evidence": [
-        {
-          "source": "<filename>",
-          "timestamp": "<optional: e.g. 00:12 → 00:28>",
-          "observation": "<what you actually observe>"
-        }
-      ],
-      "reasoning": "<step-by-step reasoning grounded in evidence>",
-      "missingEvidence": "<optional: what evidence would help>"
-    }
-  ]
-}`;
-
-  return `EVALUATION RUBRIC:
-${rubric}
-
-PARTICIPANT CLAIM:
-${claim || "(No participant claim provided)"}
-
-TASK:
-Evaluate every criterion in the rubric against the supplied evidence files attached above.
-Return ONLY this JSON structure, no markdown:
-
-${schema}`;
-}
+Return ONLY valid JSON matching the provided schema.`;
 
 export interface UploadedFile {
   name: string;
@@ -80,115 +51,176 @@ export interface UploadedFile {
   base64Data: string;
 }
 
+export interface GemmaEvaluationInput {
+  criteria: Criterion[];
+  projectDescription: string;
+  claim: string;
+  files: UploadedFile[];
+  evidenceNotes: string;
+}
+
+function buildPrompt(input: GemmaEvaluationInput): string {
+  const rubric = input.criteria
+    .map(
+      (criterion, index) =>
+        `Criterion ${index + 1} (id: "${criterion.id}"): "${criterion.requirement}"${criterion.guidance ? ` [Scoring Guidance: ${criterion.guidance}]` : ""} — max ${criterion.maxMarks} marks`
+    )
+    .join("\n");
+
+  const evidenceIndex =
+    input.files.length === 0
+      ? "(No image files attached.)"
+      : input.files
+          .map((file, index) => {
+            const screenshotIndex = index + 1;
+            return `- screenshotIndex ${screenshotIndex}: filename "${file.name}" (${file.mimeType})`;
+          })
+          .join("\n");
+
+  return `PROJECT DESCRIPTION:
+${input.projectDescription || "(No project description provided)"}
+
+EVALUATION RUBRIC:
+${rubric}
+
+LABELED EVIDENCE IMAGES:
+${evidenceIndex}
+
+EVIDENCE PROVENANCE AND EXCERPTS:
+${input.evidenceNotes || "(No additional provenance notes.)"}
+
+PARTICIPANT CLAIM:
+${input.claim || "(No participant claim provided)"}
+
+TASK:
+Evaluate every criterion against the labeled evidence only.
+evidence[].source MUST copy a labeled filename or repository path exactly.
+Do not treat repository text as runtime proof. Do not treat screenshots as proof of unseen code quality.
+If a requirement was not shown, return NOT_DEMONSTRATED, not FAIL.`;
+}
+
+function extractJson(text: string): unknown {
+  const trimmed = text.trim();
+  const unfenced = trimmed
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```\s*$/i, "")
+    .trim();
+
+  try {
+    return JSON.parse(unfenced);
+  } catch {
+    const start = unfenced.indexOf("{");
+    const end = unfenced.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      return JSON.parse(unfenced.slice(start, end + 1));
+    }
+    throw new EvaluationServiceError(
+      "The evaluation model returned a response that could not be parsed."
+    );
+  }
+}
+
+function logProviderError(error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(
+    "[evaluate] provider error:",
+    message.replace(/AIza[^\s]+/g, "[redacted]").replace(/AQ\.[^\s]+/g, "[redacted]")
+  );
+}
+
 export async function runGemmaEvaluation(
   criteria: Criterion[],
   claim: string,
-  files: UploadedFile[]
-): Promise<unknown> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not set");
-
-  const ai = new GoogleGenAI({ apiKey });
-
-  // Images: inline data. Videos: upload via File API (graceful fallback on failure).
-  const inlineParts: Array<{ inlineData: { mimeType: string; data: string } }> = [];
-  const uploadedUris: Array<{ uri: string; mimeType: string; name: string }> = [];
-
-  for (const f of files) {
-    if (f.mimeType.startsWith("video/") || f.mimeType.startsWith("audio/")) {
-      const buffer = Buffer.from(f.base64Data, "base64");
-      const blob = new Blob([buffer], { type: f.mimeType });
-      let uploadedFile = await ai.files.upload({
-        file: blob,
-        config: { mimeType: f.mimeType, displayName: f.name },
-      });
-
-      console.log(`[Files API] ${f.name} uploaded, initial state: ${uploadedFile.state}`);
-
-      const timeoutMs = 30000;
-      const intervalMs = 1000;
-      const startTime = Date.now();
-
-      while (uploadedFile.state !== FileState.ACTIVE) {
-        if (uploadedFile.state === FileState.FAILED) {
-          throw new Error(
-            `Google Files API failed to process evidence file "${f.name}": ${uploadedFile.error?.message ?? "Processing failed"}`
-          );
-        }
-
-        if (Date.now() - startTime > timeoutMs) {
-          throw new Error(
-            `Timeout (30s) waiting for evidence file "${f.name}" to become ACTIVE (last state: ${uploadedFile.state})`
-          );
-        }
-
-        await new Promise((resolve) => setTimeout(resolve, intervalMs));
-
-        if (!uploadedFile.name) {
-          throw new Error(
-            `Uploaded file "${f.name}" did not return a valid resource name for polling.`
-          );
-        }
-
-        uploadedFile = await ai.files.get({
-          name: uploadedFile.name,
-        });
-        console.log(`[Files API] Polling ${f.name}: state is ${uploadedFile.state}`);
-      }
-
-      console.log(`[Files API] ${f.name} final state: ${uploadedFile.state}`);
-
-      if (uploadedFile.uri && uploadedFile.mimeType) {
-        uploadedUris.push({
-          uri: uploadedFile.uri,
-          mimeType: uploadedFile.mimeType,
-          name: f.name,
-        });
-      }
-    } else {
-      inlineParts.push({
-        inlineData: { mimeType: f.mimeType, data: f.base64Data },
-      });
-    }
-  }
-
-  const prompt = buildPrompt(criteria, claim);
-
-  // Assemble content parts
-  const contentParts: Array<unknown> = [];
-  for (const u of uploadedUris) {
-    contentParts.push(createPartFromUri(u.uri, u.mimeType));
-    contentParts.push({ text: `[Video file: ${u.name}]` });
-  }
-  for (const p of inlineParts) {
-    contentParts.push(p);
-  }
-  contentParts.push({ text: prompt });
-
-  const response = await ai.models.generateContent({
-    model: MODEL_ID,
-    contents: createUserContent(contentParts as Parameters<typeof createUserContent>[0]),
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      temperature: 0.1,
-      maxOutputTokens: 8192,
-    },
+  files: UploadedFile[],
+  extras?: { projectDescription?: string; evidenceNotes?: string }
+): Promise<EvaluationResult> {
+  return runGemmaEvaluationWithContext({
+    criteria,
+    claim,
+    files,
+    projectDescription: extras?.projectDescription ?? "",
+    evidenceNotes: extras?.evidenceNotes ?? "",
   });
-
-  const text = response.text ?? "";
-  // Strip any markdown code fences
-  const cleaned = text
-    .replace(/^```(?:json)?\s*/im, "")
-    .replace(/\s*```\s*$/im, "")
-    .trim();
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(cleaned);
-  } catch {
-    throw new Error(`Model returned non-JSON output. Preview: ${cleaned.slice(0, 300)}`);
-  }
-  return parsed;
 }
 
-export { EvaluationResultSchema };
+export async function runGemmaEvaluationWithContext(
+  input: GemmaEvaluationInput
+): Promise<EvaluationResult> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new EvaluationServiceError(
+      "The evaluation service is not configured.",
+      500
+    );
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  const prompt = buildPrompt(input);
+
+  const contentParts: Array<{
+    text?: string;
+    inlineData?: { mimeType: string; data: string };
+  }> = [];
+
+  input.files.forEach((file, index) => {
+    const screenshotIndex = index + 1;
+    contentParts.push({
+      inlineData: { mimeType: file.mimeType, data: file.base64Data },
+    });
+    contentParts.push({
+      text: `[Evidence image | screenshotIndex ${screenshotIndex} | filename: ${file.name}]`,
+    });
+  });
+  contentParts.push({ text: prompt });
+
+  let response;
+  try {
+    response = await ai.models.generateContent({
+      model: GEMMA_MODEL_ID,
+      contents: createUserContent(contentParts),
+      config: {
+        systemInstruction: SYSTEM_INSTRUCTION,
+        temperature: 0.1,
+        maxOutputTokens: 8192,
+        responseMimeType: "application/json",
+        responseJsonSchema: evaluationResponseJsonSchema(),
+        thinkingConfig: {
+          thinkingLevel: ThinkingLevel.MINIMAL,
+        },
+      },
+    });
+  } catch (error) {
+    logProviderError(error);
+    throw new EvaluationServiceError(
+      "The evaluation model could not complete this request."
+    );
+  }
+
+  const text = response.text ?? "";
+  if (!text.trim()) {
+    throw new EvaluationServiceError(
+      "The evaluation model returned an empty response."
+    );
+  }
+
+  let parsedJson: unknown;
+  try {
+    parsedJson = extractJson(text);
+  } catch (error) {
+    if (error instanceof EvaluationServiceError) throw error;
+    logProviderError(error);
+    throw new EvaluationServiceError(
+      "The evaluation model returned a response that could not be parsed."
+    );
+  }
+
+  const parsed = EvaluationResultSchema.safeParse(parsedJson);
+  if (!parsed.success) {
+    console.error("[evaluate] schema mismatch:", parsed.error.issues.slice(0, 8));
+    throw new EvaluationServiceError(
+      "The evaluation model returned a malformed result."
+    );
+  }
+
+  return normalizeEvaluationResult(parsed.data, input.criteria);
+}

@@ -6,50 +6,56 @@ import type {
   EvaluationStatus,
   ReviewerDecision,
   CriterionOverride,
+  EvidenceReference,
 } from "@/types/evaluation";
 
 const STATUS_META: Record<
   EvaluationStatus,
-  { label: string; color: string; bg: string; border: string }
+  { label: string; color: string; bg: string; border: string; desc: string }
 > = {
   PASS: {
     label: "PASS",
     color: "text-emerald-400",
     bg: "bg-emerald-500/10",
-    border: "border-emerald-500/30",
+    border: "border-emerald-500/40",
+    desc: "Verified by concrete evidence",
   },
   PARTIAL: {
     label: "PARTIAL",
     color: "text-amber-400",
     bg: "bg-amber-500/10",
-    border: "border-amber-500/30",
+    border: "border-amber-500/40",
+    desc: "Partially demonstrated in evidence",
   },
   FAIL: {
     label: "FAIL",
     color: "text-red-400",
     bg: "bg-red-500/10",
-    border: "border-red-500/30",
+    border: "border-red-500/40",
+    desc: "Contradicted by collected evidence",
   },
   UNCERTAIN: {
     label: "UNCERTAIN",
     color: "text-purple-400",
     bg: "bg-purple-500/10",
-    border: "border-purple-500/30",
+    border: "border-purple-500/40",
+    desc: "Ambiguous or conflicting evidence",
   },
   NOT_DEMONSTRATED: {
     label: "NOT DEMONSTRATED",
-    color: "text-slate-400",
-    bg: "bg-slate-500/10",
-    border: "border-slate-500/30",
+    color: "text-zinc-400",
+    bg: "bg-zinc-800/40",
+    border: "border-zinc-700/60",
+    desc: "Not shown (absence is not failure)",
   },
 };
 
 const ALL_STATUSES: EvaluationStatus[] = [
   "PASS",
   "PARTIAL",
-  "FAIL",
-  "UNCERTAIN",
   "NOT_DEMONSTRATED",
+  "UNCERTAIN",
+  "FAIL",
 ];
 
 interface CriterionResultProps {
@@ -57,6 +63,28 @@ interface CriterionResultProps {
   index: number;
   override: CriterionOverride | undefined;
   onOverrideChange: (override: CriterionOverride) => void;
+}
+
+function getEvidenceBadge(source: string) {
+  if (source.startsWith("screenshot-") || source.includes("viewport") || source.endsWith(".png") || source.endsWith(".jpg")) {
+    return {
+      label: "Live Screenshot",
+      color: "text-cyan-400 border-cyan-800/60 bg-cyan-950/40",
+      icon: "🌐",
+    };
+  }
+  if (source.endsWith(".md") || source.endsWith(".json") || source.endsWith(".ts") || source.endsWith(".tsx") || source.endsWith(".js") || source.includes("/")) {
+    return {
+      label: "Repository Code",
+      color: "text-violet-300 border-violet-800/60 bg-violet-950/40",
+      icon: "📦",
+    };
+  }
+  return {
+    label: "Uploaded Proof",
+    color: "text-zinc-300 border-zinc-700 bg-zinc-900/60",
+    icon: "📁",
+  };
 }
 
 export default function CriterionResult({
@@ -100,42 +128,46 @@ export default function CriterionResult({
     >
       {/* ── Card Header ─────────────────────────────────────────── */}
       <div className="flex items-start gap-4 p-5">
-        {/* Index */}
-        <span className="font-mono text-xs text-white/30 pt-0.5 w-6 flex-shrink-0">
+        <span className="font-mono text-xs text-zinc-500 pt-0.5 w-6 flex-shrink-0">
           {String(index).padStart(2, "0")}
         </span>
 
-        {/* Main content */}
         <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-center gap-3 mb-2">
+          <div className="flex flex-wrap items-center gap-2.5 mb-2">
             <span
               className={`inline-flex items-center px-2.5 py-0.5 rounded-md text-xs font-bold tracking-wider font-mono ${meta.color} ${meta.bg} border ${meta.border}`}
             >
               {meta.label}
             </span>
-            <span className="text-sm text-white/40 font-mono">
+
+            <span className="text-xs font-mono text-zinc-300 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded">
               {displayMarks !== null && displayMarks !== undefined
-                ? `${displayMarks} / ${result.maxMarks} marks`
-                : `— / ${result.maxMarks} marks`}
+                ? `${displayMarks} / ${result.maxMarks} pts`
+                : `— / ${result.maxMarks} pts`}
               {decision === "OVERRIDE" && (
-                <span className="ml-2 text-indigo-400 text-xs">★ overridden</span>
+                <span className="ml-1.5 text-cyan-400 text-[10px] font-bold">★ Judge Override</span>
               )}
             </span>
-            <span className="text-xs text-white/30 font-mono ml-auto">
-              CONFIDENCE {result.confidence}%
+
+            <span className="text-[11px] text-zinc-500 font-mono ml-auto">
+              Confidence {result.confidence}%
             </span>
           </div>
-          <p className="text-sm text-white/80 font-medium leading-snug">
+
+          <p className="text-sm text-zinc-100 font-medium leading-relaxed font-sans">
             {result.criterion}
+          </p>
+          <p className="text-[11px] text-zinc-400 font-mono mt-0.5">
+            {meta.desc}
           </p>
         </div>
 
-        {/* Expand toggle */}
+        {/* Toggle */}
         <button
           type="button"
           onClick={() => setExpanded((e) => !e)}
-          className="text-white/20 hover:text-white/50 transition-colors flex-shrink-0 mt-0.5"
-          aria-label={expanded ? "Collapse" : "Expand"}
+          className="text-zinc-500 hover:text-zinc-200 transition-colors flex-shrink-0 mt-0.5 p-1 rounded"
+          aria-label={expanded ? "Collapse details" : "Expand details"}
         >
           <svg
             width="16"
@@ -155,123 +187,139 @@ export default function CriterionResult({
         </button>
       </div>
 
-      {/* ── Expanded body ────────────────────────────────────────── */}
+      {/* ── Expanded Findings Body ───────────────────────────────── */}
       {expanded && (
-        <div className="border-t border-white/5 divide-y divide-white/5">
-          {/* Evidence */}
-          {result.evidence && result.evidence.length > 0 && (
-            <div className="px-5 py-4">
-              <p className="text-[10px] font-mono font-bold tracking-widest text-white/30 uppercase mb-3">
-                Evidence
-              </p>
+        <div className="border-t border-zinc-800/80 divide-y divide-zinc-800/60">
+          {/* Evidence Citations */}
+          {result.evidence && result.evidence.length > 0 ? (
+            <div className="px-5 py-4 flex flex-col gap-2.5">
+              <span className="text-[10px] font-mono font-bold tracking-widest text-zinc-400 uppercase">
+                Supporting Evidence Citations ({result.evidence.length})
+              </span>
               <div className="flex flex-col gap-2">
-                {result.evidence.map((ev, i) => (
-                  <div
-                    key={i}
-                    className="flex items-start gap-3 bg-white/[0.03] rounded-lg px-3 py-2.5 border border-white/5"
-                  >
-                    <div className="flex-shrink-0 mt-0.5">
-                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                        <rect
-                          x="0.5"
-                          y="0.5"
-                          width="11"
-                          height="11"
-                          rx="2"
-                          stroke="#6366f1"
-                          strokeWidth="1"
-                        />
-                        <path
-                          d="M3 6h6M3 4h3"
-                          stroke="#6366f1"
-                          strokeWidth="1"
-                          strokeLinecap="round"
-                        />
-                      </svg>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <span className="text-xs font-mono text-indigo-400 truncate">
-                          {ev.source}
-                        </span>
-                        {ev.timestamp && (
-                          <span className="text-[10px] font-mono text-white/30 flex-shrink-0">
-                            {ev.timestamp}
+                {result.evidence.map((ev: EvidenceReference, i: number) => {
+                  const badge = getEvidenceBadge(ev.source);
+                  return (
+                    <div
+                      key={i}
+                      className="flex items-start gap-3 bg-zinc-950/70 rounded-lg p-3 border border-zinc-800/80"
+                    >
+                      <span className="text-sm mt-0.5">{badge.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <span
+                            className={`text-[10px] font-mono uppercase px-1.5 py-0.2 rounded border ${badge.color}`}
+                          >
+                            {badge.label}
                           </span>
-                        )}
+                          <span className="text-xs font-mono text-zinc-200 font-semibold break-all">
+                            {ev.source}
+                          </span>
+                          {ev.step && (
+                            <span className="text-[10px] font-mono text-zinc-500">
+                              step: {ev.step}
+                            </span>
+                          )}
+                          {ev.timestamp && (
+                            <span className="text-[10px] font-mono text-zinc-500">
+                              @{ev.timestamp}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-zinc-300 leading-relaxed font-sans italic bg-zinc-900/40 p-2 rounded border border-zinc-800/40">
+                          &ldquo;{ev.observation}&rdquo;
+                        </p>
                       </div>
-                      <p className="text-xs text-white/60 leading-relaxed italic">
-                        &ldquo;{ev.observation}&rdquo;
-                      </p>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
+            </div>
+          ) : (
+            <div className="px-5 py-3 bg-zinc-950/40">
+              <span className="text-[11px] font-mono text-zinc-500">
+                No specific visual evidence was captured for this requirement (Absence of evidence is treated as NOT DEMONSTRATED).
+              </span>
             </div>
           )}
 
           {/* Reasoning */}
           <div className="px-5 py-4">
-            <p className="text-[10px] font-mono font-bold tracking-widest text-white/30 uppercase mb-2">
-              Reasoning
-            </p>
-            <p className="text-xs text-white/55 leading-relaxed">
+            <span className="text-[10px] font-mono font-bold tracking-widest text-zinc-400 uppercase block mb-1.5">
+              Gemma 4 Analysis & Reasoning
+            </span>
+            <p className="text-xs text-zinc-300 leading-relaxed font-sans">
               {result.reasoning}
             </p>
           </div>
 
-          {/* Missing evidence */}
+          {/* Missing Evidence / Ambiguity Alert */}
           {result.missingEvidence && (
-            <div
-              className={`px-5 py-4 ${
-                decision === "REQUEST_EVIDENCE"
-                  ? "bg-amber-500/10 border-t border-amber-500/20"
-                  : ""
-              }`}
-            >
-              <p className="text-[10px] font-mono font-bold tracking-widest text-amber-400/70 uppercase mb-2">
-                Missing Proof
-              </p>
-              <p className="text-xs text-amber-300/70 leading-relaxed">
+            <div className="px-5 py-3.5 bg-amber-950/20 border-l-2 border-amber-500/60">
+              <span className="text-[10px] font-mono font-bold tracking-widest text-amber-400 uppercase block mb-1">
+                Missing Proof / Demonstration Gap
+              </span>
+              <p className="text-xs text-amber-200/80 leading-relaxed font-sans">
                 {result.missingEvidence}
               </p>
             </div>
           )}
 
-          {/* Human Decision Panel */}
-          <div className="px-5 py-4 bg-white/[0.02]">
-            <p className="text-[10px] font-mono font-bold tracking-widest text-white/30 uppercase mb-3">
-              Human Decision
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {(["ACCEPT", "OVERRIDE", "REQUEST_EVIDENCE"] as ReviewerDecision[]).map(
-                (d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    onClick={() => handleDecision(d)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-mono font-semibold tracking-wide border transition-all ${
-                      decision === d
-                        ? d === "ACCEPT"
-                          ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300"
-                          : d === "OVERRIDE"
-                          ? "bg-indigo-500/20 border-indigo-500/50 text-indigo-300"
-                          : "bg-amber-500/20 border-amber-500/50 text-amber-300"
-                        : "bg-transparent border-white/10 text-white/30 hover:border-white/20 hover:text-white/50"
-                    }`}
-                  >
-                    {d === "REQUEST_EVIDENCE" ? "REQUEST EVIDENCE" : d}
-                  </button>
-                )
-              )}
+          {/* Human Review Authority Controls */}
+          <div className="px-5 py-4 bg-zinc-950/60 flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-mono font-bold tracking-widest text-zinc-400 uppercase">
+                Human Judge Decision
+              </span>
+              <span className="text-[11px] font-mono text-zinc-500">
+                Reviewer retains final authority
+              </span>
             </div>
 
-            {/* Override controls */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => handleDecision("ACCEPT")}
+                className={`px-3 py-1.5 rounded-md text-xs font-mono font-semibold tracking-wide border transition-all ${
+                  decision === "ACCEPT"
+                    ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-300 shadow-sm"
+                    : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                }`}
+              >
+                ✓ Accept Recommendation ({result.suggestedMarks ?? 0} pts)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleDecision("OVERRIDE")}
+                className={`px-3 py-1.5 rounded-md text-xs font-mono font-semibold tracking-wide border transition-all ${
+                  decision === "OVERRIDE"
+                    ? "bg-cyan-500/20 border-cyan-500/50 text-cyan-300 shadow-sm"
+                    : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                }`}
+              >
+                ★ Override Verdict & Marks
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleDecision("REQUEST_EVIDENCE")}
+                className={`px-3 py-1.5 rounded-md text-xs font-mono font-semibold tracking-wide border transition-all ${
+                  decision === "REQUEST_EVIDENCE"
+                    ? "bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-sm"
+                    : "bg-zinc-900 border-zinc-800 text-zinc-400 hover:border-zinc-700 hover:text-zinc-200"
+                }`}
+              >
+                ? Request More Evidence
+              </button>
+            </div>
+
+            {/* Override Controls Drawer */}
             {decision === "OVERRIDE" && (
-              <div className="mt-4 flex flex-wrap gap-4 items-center">
+              <div className="mt-2 p-3 rounded-lg bg-zinc-900/90 border border-cyan-500/30 flex flex-wrap gap-4 items-center">
                 <div>
-                  <label className="text-[10px] font-mono text-white/30 uppercase tracking-wider block mb-1.5">
-                    Status
+                  <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider block mb-1">
+                    Override Status
                   </label>
                   <select
                     value={override?.status ?? result.status}
@@ -282,7 +330,7 @@ export default function CriterionResult({
                         marks: override?.marks ?? result.suggestedMarks ?? 0,
                       })
                     }
-                    className="bg-[#161b25] border border-white/10 text-white/80 text-xs font-mono rounded-md px-2.5 py-1.5 focus:outline-none focus:border-indigo-500/50"
+                    className="bg-zinc-950 border border-zinc-700 text-zinc-100 text-xs font-mono rounded px-2.5 py-1.5 focus:outline-none focus:border-cyan-500"
                   >
                     {ALL_STATUSES.map((s) => (
                       <option key={s} value={s}>
@@ -291,9 +339,10 @@ export default function CriterionResult({
                     ))}
                   </select>
                 </div>
+
                 <div>
-                  <label className="text-[10px] font-mono text-white/30 uppercase tracking-wider block mb-1.5">
-                    Marks (max {result.maxMarks})
+                  <label className="text-[10px] font-mono text-zinc-400 uppercase tracking-wider block mb-1">
+                    Override Marks (0 to {result.maxMarks})
                   </label>
                   <input
                     type="number"
@@ -310,9 +359,13 @@ export default function CriterionResult({
                         ),
                       })
                     }
-                    className="w-20 bg-[#161b25] border border-white/10 text-white/80 text-sm font-mono rounded-md px-2.5 py-1.5 text-right focus:outline-none focus:border-indigo-500/50"
+                    className="w-20 bg-zinc-950 border border-zinc-700 text-zinc-100 text-xs font-mono rounded px-2.5 py-1.5 text-right focus:outline-none focus:border-cyan-500"
                   />
                 </div>
+
+                <span className="text-[10px] font-mono text-cyan-400 mt-4">
+                  Changes immediately update the Judge-Approved Final Score.
+                </span>
               </div>
             )}
           </div>

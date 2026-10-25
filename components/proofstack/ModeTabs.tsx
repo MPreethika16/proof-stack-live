@@ -9,99 +9,54 @@ interface ModeTabsProps {
 
 export default function ModeTabs({ activeMode, onModeChange }: ModeTabsProps) {
   return (
-    <div style={styles.wrapper} role="tablist" aria-label="Review mode">
-      {/* Evidence Upload Tab */}
-      <button
-        id="tab-evidence-upload"
-        role="tab"
-        aria-selected={activeMode === "evidence-upload"}
-        aria-controls="panel-evidence-upload"
-        onClick={() => onModeChange("evidence-upload")}
-        style={{
-          ...styles.tab,
-          ...(activeMode === "evidence-upload" ? styles.tabActive : styles.tabInactive),
-        }}
-      >
-        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
-          <path
-            d="M3 2h9a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Z"
-            stroke="currentColor"
-            strokeWidth="1.2"
-          />
-          <path d="M7.5 5v5M5 7.5h5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-        </svg>
-        Evidence Upload
-      </button>
-
+    <div
+      role="tablist"
+      aria-label="Inspection mode"
+      className="inline-flex items-center bg-zinc-900/90 border border-zinc-800 rounded-lg p-1 gap-1"
+    >
       {/* Live Proof Tab */}
       <button
         id="tab-live-proof"
+        type="button"
         role="tab"
         aria-selected={activeMode === "live-proof"}
         aria-controls="panel-live-proof"
         onClick={() => onModeChange("live-proof")}
-        style={{
-          ...styles.tab,
-          ...(activeMode === "live-proof" ? styles.tabActive : styles.tabInactive),
-        }}
+        className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-mono font-medium transition-colors ${
+          activeMode === "live-proof"
+            ? "bg-zinc-800 text-zinc-100 border border-zinc-700/70 shadow-sm"
+            : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40 border border-transparent"
+        }`}
       >
-        <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
-          <circle cx="7.5" cy="7.5" r="5.5" stroke="currentColor" strokeWidth="1.2" />
-          <circle cx="7.5" cy="7.5" r="2" fill="currentColor" opacity="0.5" />
+        <span
+          className={`w-2 h-2 rounded-full ${
+            activeMode === "live-proof" ? "bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.6)]" : "bg-zinc-600"
+          }`}
+          aria-hidden="true"
+        />
+        <span>Live Proof (URL)</span>
+      </button>
+
+      {/* Evidence Upload Tab */}
+      <button
+        id="tab-evidence-upload"
+        type="button"
+        role="tab"
+        aria-selected={activeMode === "evidence-upload"}
+        aria-controls="panel-evidence-upload"
+        onClick={() => onModeChange("evidence-upload")}
+        className={`inline-flex items-center gap-2 px-3.5 py-1.5 rounded-md text-xs font-mono font-medium transition-colors ${
+          activeMode === "evidence-upload"
+            ? "bg-zinc-800 text-zinc-100 border border-zinc-700/70 shadow-sm"
+            : "text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/40 border border-transparent"
+        }`}
+      >
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="none" className="opacity-80" aria-hidden="true">
+          <path d="M2 13h12M8 10V2M5 5l3-3 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        Live Proof
-        <span style={styles.comingBadge} aria-label="Coming next">
-          Soon
-        </span>
+        <span>Evidence Upload (Files)</span>
       </button>
     </div>
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  wrapper: {
-    display: "inline-flex",
-    background: "var(--bg-surface)",
-    border: "1px solid var(--border-subtle)",
-    borderRadius: "var(--radius-md)",
-    padding: 4,
-    gap: 4,
-  },
-  tab: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 7,
-    padding: "8px 16px",
-    borderRadius: "var(--radius-sm)",
-    fontSize: "0.82rem",
-    fontWeight: 500,
-    cursor: "pointer",
-    border: "none",
-    transition: "all 0.15s ease",
-    letterSpacing: "0.005em",
-    position: "relative" as const,
-  },
-  tabActive: {
-    background: "var(--bg-elevated)",
-    color: "var(--text-primary)",
-    boxShadow: "0 1px 3px rgba(0,0,0,0.3)",
-    border: "1px solid var(--border-default)",
-  },
-  tabInactive: {
-    background: "transparent",
-    color: "var(--text-muted)",
-    border: "1px solid transparent",
-  },
-  comingBadge: {
-    fontSize: "0.6rem",
-    fontWeight: 700,
-    letterSpacing: "0.06em",
-    textTransform: "uppercase" as const,
-    background: "rgba(99,102,241,0.12)",
-    color: "var(--accent)",
-    border: "1px solid rgba(99,102,241,0.2)",
-    borderRadius: 99,
-    padding: "1px 6px",
-    marginLeft: 2,
-  },
-};

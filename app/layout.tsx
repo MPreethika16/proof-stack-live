@@ -13,9 +13,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ProofStack — Show the evidence. Keep the judgment human.",
+  title: "ProofStack Live — Don't trust the claim. Inspect the proof.",
   description:
-    "Multimodal evidence review powered by Gemma 4. Define rubric criteria, upload evidence, and get AI-grounded findings with human-in-the-loop review.",
+    "A human-controlled AI website verification tool that tests reviewer-defined requirements against evidence gathered from a deployed website using Gemma 4.",
 };
 
 export default function RootLayout({

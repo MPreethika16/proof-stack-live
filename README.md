@@ -1,43 +1,48 @@
-# ProofStack ⚖️
-> **"Show the evidence. Keep the judgment human."**
+# ProofStack Live ⚖️
+> **"Don't trust the claim. Inspect the proof."**
 
-ProofStack is a **human-in-the-loop multimodal evidence evaluator** designed for hackathons, code reviews, and software project assessments.
-
----
-
-## 🎯 The Core Problem
-
-Reviewers and judges evaluating software projects face a frustrating challenge: manually scrubbing through 3-minute screen recordings, scanning dozens of screenshots, and cross-referencing subjective participant claims against strict rubric requirements.
-
-- **Automated judging fails** because LLMs lack context, hallucinate, and remove human accountability.
-- **Generic chatbots fail** because they provide conversational chatter rather than structured, verifiable evidence findings.
-- **Manual review is slow**, tiring, and inconsistent across judges.
+ProofStack Live is an **evidence-grounded project evaluation platform** designed to help hackathon judges, technical reviewers, and recruiters verify software projects with multimodal evidence, AI-assisted scoring, and human authority.
 
 ---
 
-## 💡 The ProofStack Solution
+## 🎯 The Problem
 
-ProofStack provides an AI-assisted, reviewer-first workspace:
-1. **Reviewer defines criteria**: Add custom criteria (e.g. *"JWT Auth with Refresh Tokens"*, *"Interactive Real-Time Dashboard"*, *"Export to CSV & PDF"*) and assign maximum marks.
-2. **Participant supplies evidence**: Upload short screen recording demo videos, UI screenshots, and participant claims.
-3. **Gemma analyzes evidence**: Evaluates every criterion against the supplied multimodal evidence, generating evidence-grounded findings:
-   - **Status**: `PASS`, `PARTIAL`, `FAIL`, `UNCERTAIN`, or `NOT_DEMONSTRATED`
-   - **Suggested Marks** with strict bounding to max score
-   - **Reasoning** referencing specific timestamps, visual indicators, or code artifacts
-   - **Confidence Score** (0-100%)
-   - **Missing Evidence** clearly documented
-4. **Human Reviewer makes the final decision**: The reviewer reviews the analysis, adjusts any score or notes, locks final judgments, and exports a tamper-evident audit report.
+Reviewers evaluating software submissions face significant challenges:
+- **Unverified claims**: Participants claim complete authentication, payment integrations, or responsive designs that are broken or absent in reality.
+- **Manual review is slow**: Scrubbing through screen recordings, testing live links, and inspecting code repositories takes enormous time.
+- **AI autocracy is dangerous**: Blindly trusting generic LLM evaluations leads to hallucinations, false failures, and lack of human accountability.
+
+---
+
+## 💡 The ProofStack Live Solution
+
+ProofStack Live provides an evidence-first, human-in-the-loop judging console:
+1. **Judge Defines Rubric**: Define custom criteria, individual mark allocations, and scoring guidance. Total marks are calculated dynamically.
+2. **Multi-Source Evidence Collection**:
+   - **Live Website Runtime**: Headless Playwright browser automation captures viewport screenshots, scroll states, navigation timing, and console observations.
+   - **GitHub Repository Analysis**: Bounded GitHub API reader inspects `package.json`, architecture, documentation, and source files.
+   - **Supplementary Uploads**: Accepts UI screenshots and demo videos (automatically sampled into key visual frames via HTML5 canvas).
+3. **Gemma 4 Evidence Assessment**: Google's **Gemma 4** (`gemma-4-26b-a4b-it`) evaluates every criterion strictly against labeled evidence.
+   - Verdicts: `PASS`, `PARTIAL`, `FAIL`, `UNCERTAIN`, or `NOT_DEMONSTRATED`.
+   - **Absence of evidence is never treated as failure** (produces `NOT_DEMONSTRATED`).
+   - Every finding cites specific evidence artifacts (`🌐 Live Screenshot`, `📦 Repository Code`, `📁 Uploaded Proof`).
+4. **Human Authority ("AI recommends. The human judge decides.")**:
+   - The AI-suggested score is strictly advisory.
+   - The human judge can **Accept**, **Override** verdicts/marks within the dynamic criterion bounds, or **Request More Evidence**.
+   - Generates a tamper-evident, copyable Markdown audit report.
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Framework**: [Next.js](https://nextjs.org/) (App Router, Turbopack)
+- **Framework**: [Next.js 16](https://nextjs.org/) (App Router, Turbopack)
 - **Language**: [TypeScript](https://www.typescriptlang.org/) (Strict mode, zero `any`)
 - **Styling**: [Tailwind CSS v4](https://tailwindcss.com/)
-- **AI Engine**: Google Gen AI SDK (`@google/genai`) running official **Gemma 4** (`gemma-4-26b-a4b-it`) for multimodal evidence evaluation
-- **Validation**: [Zod](https://zod.dev/) for robust schema validation and JSON parsing
-- **Icons**: Lucide React
+- **AI Model**: Google Gen AI SDK (`@google/genai`) running official **Gemma 4** (`gemma-4-26b-a4b-it`)
+- **Browser Automation**: [Playwright](https://playwright.dev/) for headless website inspection and screenshot collection
+- **Repository Integration**: GitHub REST API for source inspection
+- **Validation & Schemas**: [Zod](https://zod.dev/) for structured JSON schema outputs and request validation
+- **Security**: Strict server-side SSRF validation (blocking loopback, private subnets, and cloud metadata IPs)
 
 ---
 
@@ -46,18 +51,16 @@ ProofStack provides an AI-assisted, reviewer-first workspace:
 ### 1. Prerequisites
 - Node.js 18+ installed
 
-### 2. Environment Variables
+### 2. Configure Environment
 Create a `.env.local` file in the root directory:
 ```bash
 GEMINI_API_KEY=your_gemini_api_key_here
 ```
-> ProofStack includes a built-in mock fallback engine that triggers automatically if no API key is provided, allowing full offline/demo capability.
 
 ### 3. Run Development Server
 ```bash
 npm run dev
 ```
-
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### 4. Build for Production
@@ -68,22 +71,23 @@ npm start
 
 ---
 
-## ⚡ Instant Hackathon Demo
+## ⚡ Instant Hackathon Demo Sequence
 
-To test ProofStack in seconds:
-1. Click **"Load Hackathon Demo"** in the top navigation bar.
-2. ProofStack will pre-populate:
-   - 4 realistic criteria (Authentication, Analytics Dashboard, Stripe Billing, Realtime Sync)
-   - Sample claims and visual evidence
-3. Click **"Run Evidence Evaluation"**.
-4. Inspect the breakdown, adjust human marks, override status, and click **"Export Review Summary"**.
+1. Click **"Try a Demo Evaluation →"** on the home screen.
+2. The workspace will pre-populate:
+   - **Live Demo URL**: `https://demo.vercel.store`
+   - **GitHub Repo URL**: `https://github.com/vercel/commerce`
+   - **Context**: Open-source headless commerce store
+   - **Rubric**: 4 criteria (60 dynamic total points)
+3. Click **"Run ProofStack Live Evaluation"**.
+4. Inspect the side-by-side **Judge-Approved Final Score** vs. **AI-Suggested Score**.
+5. Test the human-in-the-loop control: click **"★ Override Verdict & Marks"** on any criterion to adjust scores.
+6. Click **"Copy Markdown Audit"** for an audit log.
 
 ---
 
-## 🔒 Design Principles
+## 🔒 Responsible AI & Design Principles
 
-- **No AI Autocracy**: AI never sets final marks without human sign-off.
-- **Evidence-Grounded**: Every finding must cite visual proof or note missing demonstration.
-- **Fast & Minimal**: Zero heavy databases, vector stores, or complex orchestration frameworks. Everything runs efficiently in Next.js.
-
-
+- **No Hallucinated Failures**: Missing demonstration results in `NOT_DEMONSTRATED`, not `FAIL`.
+- **Grounded Citations**: Findings cite actual screenshot filenames, repository paths, and visual observations.
+- **Human Authority**: The human judge always retains the final verdict.

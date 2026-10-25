@@ -4,6 +4,7 @@ export interface Criterion {
   id: string;
   requirement: string;
   maxMarks: number;
+  guidance?: string;
 }
 
 // ─── Evidence ────────────────────────────────────────────────────────────────
@@ -29,8 +30,15 @@ export type EvaluationStatus =
 
 export interface EvidenceReference {
   source: string;
-  timestamp?: string;
+  timestamp?: string | null;
   observation: string;
+  screenshotIndex?: number | null;
+  step?: string | null;
+  target?: string | null;
+  kind?: string | null;
+  url?: string | null;
+  path?: string | null;
+  lineRange?: string | null;
 }
 
 // ─── Per-Criterion Result ─────────────────────────────────────────────────────
@@ -44,7 +52,7 @@ export interface CriterionEvaluation {
   confidence: number; // 0-100
   evidence: EvidenceReference[];
   reasoning: string;
-  missingEvidence?: string;
+  missingEvidence?: string | null;
 }
 
 // ─── Full Evaluation Result ───────────────────────────────────────────────────
@@ -75,3 +83,25 @@ export type AppMode = "evidence-upload" | "live-proof";
 // ─── App State ────────────────────────────────────────────────────────────────
 
 export type AppPhase = "setup" | "loading" | "results" | "error";
+
+// ─── Live Proof Inspection ───────────────────────────────────────────────────
+
+export interface LiveInspectionForm {
+  demoUrl?: string;
+  githubUrl?: string;
+  projectDescription: string;
+  requirements: Criterion[];
+}
+
+export interface LiveProofPreset {
+  id: string;
+  name: string;
+  demoUrl?: string;
+  githubUrl?: string;
+  projectDescription: string;
+  claim?: string;
+  requirements: Criterion[];
+  description: string;
+}
+
+
